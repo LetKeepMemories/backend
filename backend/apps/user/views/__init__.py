@@ -1,0 +1,31 @@
+from .auth import (
+    ChangeEmailView,
+    ConfirmPasswordChangeOTPView,
+    CSRFTokenView,
+    LoginView,
+    LogoutView,
+    MeView,
+    PasswordResetConfirmView,
+    PasswordResetRequestView,
+    RefreshView,
+    RequestPasswordChangeOTPView,
+    ResendVerificationView,
+    SignupView,
+    VerifyEmailView,
+)
+
+__all__ = [
+    "ChangeEmailView",
+    "ConfirmPasswordChangeOTPView",
+    "CSRFTokenView",
+    "LoginView",
+    "LogoutView",
+    "MeView",
+    "PasswordResetConfirmView",
+    "PasswordResetRequestView",
+    "RefreshView",
+    "RequestPasswordChangeOTPView",
+    "ResendVerificationView",
+    "SignupView",
+    "VerifyEmailView",
+]

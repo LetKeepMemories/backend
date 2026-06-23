@@ -1,0 +1,18 @@
+{% extends "emails/base_email.html" %}
+{% block title %}Welcome to Lets Keep Memories{% endblock %}
+{% block content %}
+  <h1 style="margin:0 0 16px;font-size:20px;color:#1f1a17;">You're all set, {{ first_name }}</h1>
+  <p style="margin:0 0 24px;font-size:15px;line-height:24px;color:#52483f;">
+    Your email is verified. You can now create your first occasion — a birthday page, a memorial
+    tribute, or an anniversary celebration — and start collecting wishes from the people who matter.
+  </p>
+  <table role="presentation" cellpadding="0" cellspacing="0">
+    <tr>
+      <td style="border-radius:10px;background-color:#e8643a;">
+        <a href="{{ login_link }}" style="display:inline-block;padding:12px 24px;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;">
+          Go to your dashboard
+        </a>
+      </td>
+    </tr>
+  </table>
+{% endblock %}
