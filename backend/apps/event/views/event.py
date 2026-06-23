@@ -20,6 +20,8 @@ from apps.event.serializers import (
     OccasionUpdateSerializer,
 )
 from apps.event.services import UploadNotAllowed, assert_can_upload_media, create_guest_message, create_occasion
+from apps.subscription.serializers import GalleryLimitSerializer
+from apps.subscription.services import get_admin_config
 
 
 @extend_schema(
@@ -34,6 +36,21 @@ class EventTypeListView(generics.ListAPIView):
     serializer_class = EventTypeSerializer
     pagination_class = None
     queryset = EventType.objects.filter(is_active=True)
+
+
+@extend_schema(
+    tags=["Events (Metadata)"],
+    summary="Get Gallery Image Limit",
+    description="Returns the platform-wide max number of gallery images an owner can attach to an occasion, set by admins.",
+    responses={200: GalleryLimitSerializer}
+)
+class GalleryLimitView(APIView):
+    authentication_classes = []
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        config = get_admin_config()
+        return Response({"max_gallery_images": config.max_gallery_images})
 
 
 @extend_schema(tags=["Events (Owner)"])
@@ -94,18 +111,21 @@ class OccasionGalleryUploadView(APIView):
     @extend_schema(
         tags=["Events (Owner)"],
         summary="Upload Gallery Image",
-        description="Adds a new image to the occasion's gallery. Enforces a maximum of 5 images.",
+        description="Adds a new image to the occasion's gallery. Enforces the admin-configured max gallery image count.",
         responses={
             201: OccasionGallerySerializer,
-            400: OpenApiResponse(description="Validation error (max 5 images limit)")
+            400: OpenApiResponse(description="Validation error (gallery image limit reached)")
         }
     )
     def post(self, request, id):
         occasion = get_object_or_404(Occasion, id=id, owner=request.user)
-        
-        # Enforce max 5 images limit
-        if occasion.gallery_images.count() >= 5:
-            return Response({"detail": "Maximum of 5 images allowed in the gallery."}, status=status.HTTP_400_BAD_REQUEST)
+
+        max_gallery_images = get_admin_config().max_gallery_images
+        if occasion.gallery_images.count() >= max_gallery_images:
+            return Response(
+                {"detail": f"Maximum of {max_gallery_images} images allowed in the gallery."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         image_url = request.data.get("image_url")
         if not image_url:
@@ -113,6 +133,25 @@ class OccasionGalleryUploadView(APIView):
 
         gallery_image = OccasionGallery.objects.create(occasion=occasion, image_url=image_url)
         return Response(OccasionGallerySerializer(gallery_image).data, status=status.HTTP_201_CREATED)
+
+
+class OccasionGalleryDetailView(generics.DestroyAPIView):
+    """Lets an owner remove a single image from their occasion's gallery."""
+
+    permission_classes = [permissions.IsAuthenticated, IsOccasionOwner]
+    lookup_url_kwarg = "image_id"
+
+    @extend_schema(
+        tags=["Events (Owner)"],
+        summary="Delete Gallery Image",
+        description="Removes a single image from the occasion's gallery.",
+        responses={204: OpenApiResponse(description="Image deleted")}
+    )
+    def delete(self, request, *args, **kwargs):
+        return super().delete(request, *args, **kwargs)
+
+    def get_queryset(self):
+        return OccasionGallery.objects.filter(occasion_id=self.kwargs["id"])
 
 
 @extend_schema(

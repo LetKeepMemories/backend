@@ -17,6 +17,12 @@ class MessageMediaInline(admin.TabularInline):
     readonly_fields = ["created_at"]
 
 
+class OccasionGalleryInline(admin.TabularInline):
+    model = OccasionGallery
+    extra = 1
+    readonly_fields = ["created_at"]
+
+
 @admin.register(Occasion)
 class OccasionAdmin(admin.ModelAdmin):
     list_display = ["title", "event_type", "owner", "status", "public_url", "created_at"]
@@ -24,6 +30,7 @@ class OccasionAdmin(admin.ModelAdmin):
     search_fields = ["title", "slug", "person_first_name", "person_last_name", "owner__email"]
     autocomplete_fields = ["owner"]
     readonly_fields = ["id", "slug", "public_url", "created_at", "updated_at"]
+    inlines = [OccasionGalleryInline]
 
 
 @admin.register(Message)

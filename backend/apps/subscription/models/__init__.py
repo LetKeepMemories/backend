@@ -1,3 +1,3 @@
-from .subscription import SubscriptionPlan, UserSubscription
+from .subscription import AdminSubscriptionConfig, SubscriptionPlan, UserSubscription
 
-__all__ = ["SubscriptionPlan", "UserSubscription"]
+__all__ = ["AdminSubscriptionConfig", "SubscriptionPlan", "UserSubscription"]

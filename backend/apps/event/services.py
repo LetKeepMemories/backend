@@ -2,7 +2,7 @@ from django.db.models import Sum
 
 from apps.event.models import Message, MessageMedia, Occasion
 from apps.event.utils import build_slug_base, generate_unique_slug
-from apps.subscription.services import get_active_plan
+from apps.subscription.services import get_active_plan, get_admin_config
 
 BYTES_PER_MB = 1024 * 1024
 
@@ -30,12 +30,15 @@ def create_occasion(*, owner, event_type, title, person_first_name, person_last_
 
 
 def assert_can_upload_media(*, occasion: Occasion, media_type: str, file_size_bytes: int) -> None:
-    """Server-side enforcement of the owner's subscription limits. The
+    """Server-side enforcement of the owner's upload limits. The
     Cloudinary signature endpoint checks this before issuing a signature,
     and the MessageMedia creation endpoint checks it again afterwards —
     never trust the client's claimed file size/type alone.
+
+    Admin-owned occasions aren't tied to a SubscriptionPlan — they're
+    governed by the admin-editable AdminSubscriptionConfig singleton instead.
     """
-    plan = get_active_plan(occasion.owner)
+    plan = get_admin_config() if occasion.owner.user_type == "admin" else get_active_plan(occasion.owner)
 
     if media_type == MessageMedia.MediaType.VIDEO and not plan.allow_video:
         raise UploadNotAllowed("Video uploads are not available on the current plan.")

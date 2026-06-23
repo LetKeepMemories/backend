@@ -3,6 +3,7 @@ from rest_framework.routers import DefaultRouter
 
 from apps.event.views import (
     MessageModerationView,
+    OccasionGalleryDetailView,
     OccasionGalleryUploadView,
     OccasionMessageListView,
     OccasionProfileImageSignatureView,
@@ -14,6 +15,11 @@ router.register("occasions", OccasionViewSet, basename="occasion")
 
 urlpatterns = [
     path("occasions/<uuid:id>/gallery/", OccasionGalleryUploadView.as_view(), name="occasion_gallery_upload"),
+    path(
+        "occasions/<uuid:id>/gallery/<uuid:image_id>/",
+        OccasionGalleryDetailView.as_view(),
+        name="occasion_gallery_detail",
+    ),
     path(
         "occasions/profile-image-signature/",
         OccasionProfileImageSignatureView.as_view(),

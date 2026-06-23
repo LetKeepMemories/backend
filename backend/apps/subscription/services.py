@@ -1,13 +1,26 @@
 from django.db.models import Q
 from django.utils import timezone
 
-from apps.subscription.models import SubscriptionPlan, UserSubscription
-
-FREE_PLAN_NAME = "Free"
-
+from apps.subscription.models import AdminSubscriptionConfig, SubscriptionPlan, UserSubscription
 
 def get_free_plan() -> SubscriptionPlan:
-    return SubscriptionPlan.objects.get(name=FREE_PLAN_NAME)
+    plan = SubscriptionPlan.objects.filter(is_free=True).first()
+    if not plan:
+        # Fallback if no plan is marked as free yet (should be configured by admin)
+        plan, _ = SubscriptionPlan.objects.get_or_create(
+            name="Free",
+            defaults={"is_free": True, "price": 0}
+        )
+    return plan
+
+
+def get_admin_config() -> AdminSubscriptionConfig:
+    """Admins don't subscribe to a plan, but their occasions still need
+    upload limits — backed by this admin-editable singleton instead."""
+    config = AdminSubscriptionConfig.objects.first()
+    if config is None:
+        config = AdminSubscriptionConfig.objects.create()
+    return config
 
 
 def get_active_subscription(user) -> UserSubscription | None:

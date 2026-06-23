@@ -1,0 +1,13 @@
+{% extends "admin/base_site.html" %}
+
+{% block extrastyle %}
+{{ block.super }}
+<style>
+    /* Make the admin content area take up the full screen width */
+    #content {
+        max-width: 100% !important;
+        padding-left: 20px;
+        padding-right: 20px;
+    }
+</style>
+{% endblock %}
