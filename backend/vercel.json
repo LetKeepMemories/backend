@@ -1,13 +1,6 @@
 {
   "version": 2,
   "buildCommand": "chmod +x build.sh && ./build.sh",
-  "outputDirectory": ".",
-  "functions": {
-    "api/index.py": {
-      "runtime": "python3.9",
-      "maxDuration": 30
-    }
-  },
   "rewrites": [
     {
       "source": "/(.*)",
