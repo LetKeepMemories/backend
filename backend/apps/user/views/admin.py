@@ -15,8 +15,8 @@ class AdminUserListView(generics.ListAPIView):
     permission_classes = [IsSuperAdminUser]
     
     def get(self, request, *args, **kwargs):
-        users = User.objects.all().order_by('-date_joined')
-        
+        users = User.objects.all().order_by('-created_at')
+
         user_data = []
         for user in users:
             plan = get_active_plan(user)
@@ -26,7 +26,7 @@ class AdminUserListView(generics.ListAPIView):
                 "first_name": user.first_name,
                 "last_name": user.last_name,
                 "user_type": user.user_type,
-                "date_joined": user.date_joined.isoformat(),
+                "date_joined": user.created_at.isoformat(),
                 "active_plan": plan.name if plan else "None",
             })
             
