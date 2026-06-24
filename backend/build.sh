@@ -1,7 +1,5 @@
 #!/bin/bash
-
-echo "Installing requirements..."
-pip install -r requirements.txt
+set -e
 
 echo "Collecting static files..."
 python manage.py collectstatic --noinput
