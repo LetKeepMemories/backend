@@ -1,5 +1,4 @@
 {
-  "buildCommand": "chmod +x build.sh && ./build.sh",
   "rewrites": [
     {
       "source": "/(.*)",
