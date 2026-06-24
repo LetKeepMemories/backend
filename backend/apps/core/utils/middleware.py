@@ -44,9 +44,7 @@ class ErrorTrackingMiddleware:
                 "request_body": request_body,
                 "response_payload": response_payload,
             }
-            error_str = f"HTTP Error {response.status_code} at {request.path}: {json.dumps(log_data, default=str)}\n"
+            error_str = f"HTTP Error {response.status_code} at {request.path}: {json.dumps(log_data, default=str)}"
             logger.error(error_str)
-            with open("error_log.txt", "a") as f:
-                f.write(error_str)
 
         return response
