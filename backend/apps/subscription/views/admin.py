@@ -1,3 +1,4 @@
+from drf_spectacular.utils import extend_schema
 from rest_framework import viewsets
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -8,6 +9,7 @@ from apps.subscription.services import get_admin_config
 from apps.user.permissions import IsSuperAdminUser
 
 
+@extend_schema(tags=["Admin"])
 class AdminSubscriptionPlanViewSet(viewsets.ModelViewSet):
     """Admin CRUD for pricing plans."""
 
@@ -17,6 +19,7 @@ class AdminSubscriptionPlanViewSet(viewsets.ModelViewSet):
     pagination_class = None
 
 
+@extend_schema(tags=["Admin"])
 class AdminSubscriptionConfigView(APIView):
     """Singleton settings for the upload limits applied to admin-owned
     occasions, which don't go through a SubscriptionPlan."""

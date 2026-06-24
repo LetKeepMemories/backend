@@ -58,7 +58,17 @@ class AdminSubscriptionConfig(BaseModel):
     max_storage = models.PositiveIntegerField(default=10_000, help_text="Total storage allowance in MB.")
     allow_video = models.BooleanField(default=True)
     allow_audio_message = models.BooleanField(default=True)
-    max_video_size = models.PositiveIntegerField(default=500, help_text="Max size per video upload, in MB.")
+    
+    # Global Size Config
+    max_upload_image_size_mb = models.PositiveIntegerField(default=5, help_text="Global max size per image upload, in MB.")
+    max_upload_video_size_mb = models.PositiveIntegerField(default=50, help_text="Global max size per video upload, in MB.")
+    max_upload_audio_size_mb = models.PositiveIntegerField(default=10, help_text="Global max size per audio upload, in MB.")
+
+    # Global Guest Message Config
+    max_images_per_message = models.PositiveIntegerField(default=5, help_text="Max images a guest can attach to one message.")
+    max_videos_per_message = models.PositiveIntegerField(default=1, help_text="Max videos a guest can attach to one message.")
+    max_audio_per_message = models.PositiveIntegerField(default=1, help_text="Max audio files a guest can attach to one message.")
+
     max_gallery_images = models.PositiveIntegerField(
         default=5, help_text="Max gallery images an owner can attach to an occasion (platform-wide)."
     )

@@ -19,6 +19,8 @@ class User(AbstractBaseUser, PermissionsMixin, BaseModel):
     is_staff = models.BooleanField(default=False)
     is_verified = models.BooleanField(default=False)
 
+    media_storage_used_bytes = models.PositiveBigIntegerField(default=0)
+
     objects = UserManager()
 
     USERNAME_FIELD = "email"

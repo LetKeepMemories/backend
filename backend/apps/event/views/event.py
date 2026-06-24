@@ -5,6 +5,7 @@ from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 from drf_spectacular.utils import extend_schema, OpenApiResponse
 
+from django.conf import settings
 from apps.core.utils.cloudinary_utils import generate_upload_signature
 from apps.event.models import EventType, Message, MessageMedia, Occasion, OccasionGallery
 from apps.event.permissions import IsOccasionOwner
@@ -101,7 +102,35 @@ class OccasionProfileImageSignatureView(APIView):
         responses={200: OpenApiResponse(description="Signature generated")}
     )
     def post(self, request):
+        from apps.subscription.models import AdminSubscriptionConfig
+        config = AdminSubscriptionConfig.objects.first()
+        max_mb = config.max_upload_image_size_mb if config else 5
+        
+        estimated_file_size = int(request.data.get("estimated_file_size") or 0)
+        if estimated_file_size > max_mb * 1024 * 1024:
+            return Response({"detail": f"Image exceeds the maximum size of {max_mb}MB."}, status=status.HTTP_400_BAD_REQUEST)
+
         signature = generate_upload_signature(folder="occasion_gallery", resource_type="image")
+        return Response(signature)
+
+class OccasionGallerySignatureView(APIView):
+    permission_classes = [permissions.IsAuthenticated, IsOccasionOwner]
+
+    @extend_schema(
+        tags=["Events (Owner)"],
+        summary="Generate Gallery Image Signature",
+        description="Generates a Cloudinary signature for the owner to upload a gallery image. Enforces storage limits.",
+        responses={200: OpenApiResponse(description="Signature generated"), 403: OpenApiResponse(description="Storage limits exceeded")}
+    )
+    def post(self, request, id):
+        occasion = get_object_or_404(Occasion, id=id, owner=request.user)
+        estimated_file_size = int(request.data.get("estimated_file_size") or 0)
+        try:
+            assert_can_upload_media(occasion=occasion, media_type="image", file_size_bytes=estimated_file_size)
+        except UploadNotAllowed as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_403_FORBIDDEN)
+        
+        signature = generate_upload_signature(folder=f"occasion_gallery/{occasion.id}", resource_type="image")
         return Response(signature)
 
 
@@ -128,10 +157,11 @@ class OccasionGalleryUploadView(APIView):
             )
 
         image_url = request.data.get("image_url")
+        file_size = int(request.data.get("file_size") or 0)
         if not image_url:
             return Response({"detail": "image_url is required."}, status=status.HTTP_400_BAD_REQUEST)
 
-        gallery_image = OccasionGallery.objects.create(occasion=occasion, image_url=image_url)
+        gallery_image = OccasionGallery.objects.create(occasion=occasion, image_url=image_url, file_size=file_size)
         return Response(OccasionGallerySerializer(gallery_image).data, status=status.HTTP_201_CREATED)
 
 

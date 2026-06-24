@@ -31,7 +31,11 @@ def initialize_payment(*, user, subscription_plan) -> dict:
 
     response = requests.post(url, json=data, headers=headers)
     if not response.ok:
-        raise PaystackError(f"Paystack initialization failed: {response.text}")
+        try:
+            error_msg = response.text
+        except Exception:
+            error_msg = "Payment gateway configuration error."
+        raise PaystackError(f"Paystack initialization failed: {error_msg}")
         
     res_data = response.json()
     if not res_data.get("status"):

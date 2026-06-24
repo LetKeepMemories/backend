@@ -20,7 +20,33 @@ class UserSubscriptionAdmin(admin.ModelAdmin):
 
 @admin.register(AdminSubscriptionConfig)
 class AdminSubscriptionConfigAdmin(admin.ModelAdmin):
-    list_display = ["max_images_count", "max_video_count", "max_audio_count", "max_storage", "allow_video", "allow_audio_message", "max_video_size", "max_gallery_images"]
+    list_display = ["max_images_count", "max_video_count", "max_audio_count", "max_storage", "allow_video"]
+    
+    fieldsets = (
+        ("Admin Owner Allowances", {
+            "fields": (
+                "max_images_count",
+                "max_video_count",
+                "max_audio_count",
+                "max_storage",
+                "allow_video",
+                "allow_audio_message",
+            ),
+            "description": "These limits apply to occasions created by Admin users."
+        }),
+        ("Global Configuration", {
+            "fields": (
+                "max_gallery_images",
+                "max_images_per_message",
+                "max_videos_per_message",
+                "max_audio_per_message",
+                "max_upload_image_size_mb",
+                "max_upload_video_size_mb",
+                "max_upload_audio_size_mb",
+            ),
+            "description": "These limits apply globally across the entire platform."
+        }),
+    )
 
     def has_add_permission(self, request):
         # Prevent creating multiple configurations, as this is a singleton

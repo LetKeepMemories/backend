@@ -56,6 +56,7 @@ class Occasion(BaseModel):
 class OccasionGallery(BaseModel):
     occasion = models.ForeignKey(Occasion, on_delete=models.CASCADE, related_name="gallery_images")
     image_url = models.URLField()
+    file_size = models.PositiveIntegerField(default=0)
 
     class Meta:
         ordering = ["created_at"]

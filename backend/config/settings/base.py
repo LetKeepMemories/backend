@@ -59,6 +59,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "apps.core.utils.middleware.ErrorTrackingMiddleware",
 ]
 
 ROOT_URLCONF = "config.urls"
@@ -203,7 +204,7 @@ RESEND_API_KEY = env("RESEND_API_KEY", default="")
 DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="Lets Keep Memories <no-reply@lifememories.app>")
 
 # ---------------------------------------------------------------------------
-# Cloudinary
+# Cloudinary & Upload Limits
 # ---------------------------------------------------------------------------
 CLOUDINARY_CLOUD_NAME = env("CLOUDINARY_CLOUD_NAME", default="")
 CLOUDINARY_API_KEY = env("CLOUDINARY_API_KEY", default="")
@@ -219,12 +220,6 @@ PAYSTACK_SECRET_KEY = env("PAYSTACK_SECRET_KEY", default="")
 # ---------------------------------------------------------------------------
 OPENAI_API_KEY = env("OPENAI_API_KEY", default="")
 
-# ---------------------------------------------------------------------------
-# Media upload limits (hard ceiling, independent of plan limits)
-# ---------------------------------------------------------------------------
-MAX_UPLOAD_VIDEO_SIZE_MB = env.int("MAX_UPLOAD_VIDEO_SIZE_MB", default=200)
-MAX_UPLOAD_IMAGE_SIZE_MB = env.int("MAX_UPLOAD_IMAGE_SIZE_MB", default=15)
-MAX_UPLOAD_AUDIO_SIZE_MB = env.int("MAX_UPLOAD_AUDIO_SIZE_MB", default=50)
 
 LOGGING = {
     "version": 1,

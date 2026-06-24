@@ -1,8 +1,10 @@
 from django.db.models import Sum
+from django.conf import settings
 
-from apps.event.models import Message, MessageMedia, Occasion
+from apps.event.models import Message, MessageMedia, Occasion, OccasionGallery
 from apps.event.utils import build_slug_base, generate_unique_slug
 from apps.subscription.services import get_active_plan, get_admin_config
+from apps.subscription.models import AdminSubscriptionConfig
 
 BYTES_PER_MB = 1024 * 1024
 
@@ -39,6 +41,18 @@ def assert_can_upload_media(*, occasion: Occasion, media_type: str, file_size_by
     governed by the admin-editable AdminSubscriptionConfig singleton instead.
     """
     plan = get_admin_config() if occasion.owner.user_type == "admin" else get_active_plan(occasion.owner)
+    admin_config = AdminSubscriptionConfig.objects.first()
+
+    # 1. System-wide hard limits (from AdminSubscriptionConfig)
+    if admin_config:
+        if media_type == MessageMedia.MediaType.VIDEO and file_size_bytes > admin_config.max_upload_video_size_mb * BYTES_PER_MB:
+            raise UploadNotAllowed(f"This video exceeds the system maximum of {admin_config.max_upload_video_size_mb}MB.")
+        if media_type == MessageMedia.MediaType.IMAGE and file_size_bytes > admin_config.max_upload_image_size_mb * BYTES_PER_MB:
+            raise UploadNotAllowed(f"This image exceeds the system maximum of {admin_config.max_upload_image_size_mb}MB.")
+        if media_type == MessageMedia.MediaType.AUDIO and file_size_bytes > admin_config.max_upload_audio_size_mb * BYTES_PER_MB:
+            raise UploadNotAllowed(f"This audio exceeds the system maximum of {admin_config.max_upload_audio_size_mb}MB.")
+
+    # 2. Plan-specific feature limits
 
     if media_type == MessageMedia.MediaType.VIDEO and not plan.allow_video:
         raise UploadNotAllowed("Video uploads are not available on the current plan.")
@@ -70,12 +84,8 @@ def assert_can_upload_media(*, occasion: Occasion, media_type: str, file_size_by
             raise UploadNotAllowed("This occasion has reached its video limit on the current plan.")
 
     if plan.max_storage:
-        total_bytes = (
-            MessageMedia.objects.filter(message__occasion__owner=occasion.owner).aggregate(total=Sum("file_size"))[
-                "total"
-            ]
-            or 0
-        )
+        total_bytes = occasion.owner.media_storage_used_bytes
+
         if total_bytes + file_size_bytes > plan.max_storage * BYTES_PER_MB:
             raise UploadNotAllowed("Storage limit reached on the current plan.")
 

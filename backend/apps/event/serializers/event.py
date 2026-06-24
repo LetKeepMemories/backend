@@ -1,5 +1,6 @@
 from django.utils.text import slugify
 from rest_framework import serializers
+from rest_framework.validators import UniqueValidator
 
 from apps.event.models import EventType, Message, MessageMedia, Occasion, OccasionGallery
 
@@ -107,7 +108,12 @@ class OccasionSerializer(serializers.ModelSerializer):
 
 class OccasionCreateSerializer(serializers.ModelSerializer):
     event_type = serializers.SlugRelatedField(slug_field="slug", queryset=EventType.objects.filter(is_active=True))
-    slug = serializers.SlugField(max_length=255, required=False, allow_blank=True)
+    slug = serializers.SlugField(
+        max_length=255, 
+        required=False, 
+        allow_blank=True,
+        validators=[UniqueValidator(queryset=Occasion.objects.all(), message="This custom URL is already in use. Please choose another.")]
+    )
 
     class Meta:
         model = Occasion
@@ -152,6 +158,7 @@ class OccasionPublicSerializer(serializers.ModelSerializer):
     event_type = EventTypeSerializer(read_only=True)
     person_full_name = serializers.CharField(read_only=True)
     gallery_images = OccasionGallerySerializer(many=True, read_only=True)
+    capabilities = serializers.SerializerMethodField()
 
     class Meta:
         model = Occasion
@@ -173,7 +180,26 @@ class OccasionPublicSerializer(serializers.ModelSerializer):
             "age",
             "metadata",
             "gallery_images",
+            "capabilities",
         ]
+
+    def get_capabilities(self, obj):
+        from apps.subscription.services import get_active_plan, get_admin_config
+        from apps.subscription.models import AdminSubscriptionConfig
+        
+        plan = get_admin_config() if obj.owner.user_type == "admin" else get_active_plan(obj.owner)
+        config = AdminSubscriptionConfig.objects.first()
+        
+        return {
+            "allow_video": plan.allow_video,
+            "allow_audio_message": plan.allow_audio_message,
+            "max_images_per_message": config.max_images_per_message if config else 5,
+            "max_videos_per_message": config.max_videos_per_message if config else 1,
+            "max_audio_per_message": config.max_audio_per_message if config else 1,
+            "max_upload_image_size_mb": config.max_upload_image_size_mb if config else 5,
+            "max_upload_video_size_mb": config.max_upload_video_size_mb if config else 50,
+            "max_upload_audio_size_mb": config.max_upload_audio_size_mb if config else 10,
+        }
 
 
 class MessageSerializer(serializers.ModelSerializer):
@@ -233,4 +259,21 @@ class GuestMessageCreateSerializer(serializers.Serializer):
     def validate(self, attrs):
         if not attrs.get("message") and not attrs.get("media"):
             raise serializers.ValidationError("Write a message or attach at least one photo, video, or voice note.")
+            
+        media_items = attrs.get("media", [])
+        if media_items:
+            from apps.subscription.models import AdminSubscriptionConfig
+            config = AdminSubscriptionConfig.objects.first()
+            if config:
+                image_count = sum(1 for item in media_items if item["media_type"] == "image")
+                video_count = sum(1 for item in media_items if item["media_type"] == "video")
+                audio_count = sum(1 for item in media_items if item["media_type"] == "audio")
+                
+                if image_count > config.max_images_per_message:
+                    raise serializers.ValidationError(f"Maximum of {config.max_images_per_message} images allowed per message.")
+                if video_count > config.max_videos_per_message:
+                    raise serializers.ValidationError(f"Maximum of {config.max_videos_per_message} video allowed per message.")
+                if audio_count > config.max_audio_per_message:
+                    raise serializers.ValidationError(f"Maximum of {config.max_audio_per_message} audio allowed per message.")
+        
         return attrs
