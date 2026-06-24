@@ -186,7 +186,7 @@ AUTH_COOKIE_ACCESS = "access_token"
 AUTH_COOKIE_REFRESH = "refresh_token"
 AUTH_COOKIE_SECURE = config("AUTH_COOKIE_SECURE", default=True, cast=bool)
 AUTH_COOKIE_SAMESITE = "Lax"
-AUTH_COOKIE_DOMAIN = config("AUTH_COOKIE_DOMAIN", default=None)
+AUTH_COOKIE_DOMAIN = config("AUTH_COOKIE_DOMAIN", default=None) or None
 
 # ---------------------------------------------------------------------------
 # CORS / CSRF
