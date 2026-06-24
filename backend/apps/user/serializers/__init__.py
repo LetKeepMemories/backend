@@ -1,5 +1,6 @@
 from .auth import (
-    ChangeEmailSerializer,
+    ChangeEmailConfirmSerializer,
+    ChangeEmailRequestSerializer,
     EmailVerificationConfirmSerializer,
     LoginSerializer,
     PasswordChangeOTPConfirmSerializer,
@@ -12,7 +13,8 @@ from .auth import (
 )
 
 __all__ = [
-    "ChangeEmailSerializer",
+    "ChangeEmailConfirmSerializer",
+    "ChangeEmailRequestSerializer",
     "EmailVerificationConfirmSerializer",
     "LoginSerializer",
     "PasswordChangeOTPConfirmSerializer",

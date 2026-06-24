@@ -14,7 +14,7 @@ def send_email(*, to: str, subject: str, template: str, context: dict) -> None:
     breaks the request that triggered it (signup, payment, etc.) — callers
     that need delivery guarantees should invoke this from a Celery task.
     """
-    html = render_to_string(f"emails/{template}", context)
+    html = render_to_string(f"emails/{template}", {**context, "frontend_url": settings.FRONTEND_URL})
 
     if not settings.RESEND_API_KEY:
         # No provider configured (e.g. local dev) — log instead of failing,

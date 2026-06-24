@@ -1,5 +1,6 @@
 from .auth import (
-    ChangeEmailView,
+    ChangeEmailConfirmView,
+    ChangeEmailRequestView,
     ConfirmPasswordChangeOTPView,
     CSRFTokenView,
     LoginView,
@@ -15,7 +16,8 @@ from .auth import (
 )
 
 __all__ = [
-    "ChangeEmailView",
+    "ChangeEmailConfirmView",
+    "ChangeEmailRequestView",
     "ConfirmPasswordChangeOTPView",
     "CSRFTokenView",
     "LoginView",

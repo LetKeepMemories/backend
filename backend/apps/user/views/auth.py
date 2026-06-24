@@ -1,12 +1,5 @@
-import secrets
-from datetime import timedelta
-
 from django.contrib.auth import authenticate
-from django.contrib.auth.hashers import check_password, make_password
 from django.middleware.csrf import get_token
-from django.utils import timezone
-from django.utils.encoding import force_str
-from django.utils.http import urlsafe_base64_decode
 from rest_framework import permissions, status
 from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
@@ -18,9 +11,10 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 from apps.user.utils.authentication import CookieJWTAuthentication
 from apps.user.utils.cookies import clear_auth_cookies, set_auth_cookies
-from apps.user.models import PasswordChangeOTP, User
+from apps.user.models import EmailOTP, User
 from apps.user.serializers import (
-    ChangeEmailSerializer,
+    ChangeEmailConfirmSerializer,
+    ChangeEmailRequestSerializer,
     EmailVerificationConfirmSerializer,
     LoginSerializer,
     PasswordChangeOTPConfirmSerializer,
@@ -32,29 +26,19 @@ from apps.user.serializers import (
     UserUpdateSerializer,
 )
 from apps.user.utils.tasks import (
+    send_change_email_otp_task,
     send_password_change_otp_task,
     send_password_reset_email_task,
     send_verification_email_task,
     send_welcome_email_task,
 )
-from apps.user.utils.tokens import email_verification_token, password_reset_token
-
-PASSWORD_CHANGE_OTP_VALIDITY_MINUTES = 10
 
 GENERIC_RESET_RESPONSE = {
-    "detail": "If an account exists for that email, password reset instructions have been sent."
+    "detail": "If an account exists for that email, a password reset code has been sent."
 }
 GENERIC_RESEND_RESPONSE = {
-    "detail": "If an account exists for that email, a verification link has been sent."
+    "detail": "If an account exists for that email, a verification code has been sent."
 }
-
-
-def _decode_uid(uid: str):
-    try:
-        user_pk = force_str(urlsafe_base64_decode(uid))
-        return User.objects.get(pk=user_pk)
-    except (User.DoesNotExist, ValueError, TypeError, OverflowError):
-        return None
 
 
 def _issue_session(user) -> Response:
@@ -88,7 +72,7 @@ class SignupView(APIView):
     @extend_schema(
         tags=["Auth"],
         summary="User Signup",
-        description="Registers a new user and sends an email verification link. Returns user details and an HttpOnly cookie containing the JWT.",
+        description="Registers a new user and sends an email verification code. Returns user details and an HttpOnly cookie containing the JWT.",
         request=SignupSerializer,
         responses={201: UserSerializer}
     )
@@ -109,20 +93,21 @@ class VerifyEmailView(APIView):
     @extend_schema(
         tags=["Auth"],
         summary="Verify Email",
-        description="Verifies the user's email address using the UID and token sent to their inbox.",
+        description="Verifies the user's email address using the code sent to their inbox.",
         request=EmailVerificationConfirmSerializer,
         responses={
             200: UserSerializer,
-            400: OpenApiResponse(description="Invalid or expired verification link.")
+            400: OpenApiResponse(description="Invalid or expired verification code.")
         }
     )
     def post(self, request):
         serializer = EmailVerificationConfirmSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        user = _decode_uid(serializer.validated_data["uid"])
+        user = User.objects.filter(email=serializer.validated_data["email"].lower()).first()
 
-        if user is None or not email_verification_token.check_token(user, serializer.validated_data["token"]):
-            return Response({"detail": "Invalid or expired verification link."}, status=status.HTTP_400_BAD_REQUEST)
+        otp = user and EmailOTP.verify(user, EmailOTP.Purpose.EMAIL_VERIFICATION, serializer.validated_data["code"])
+        if otp is None:
+            return Response({"detail": "Invalid or expired verification code."}, status=status.HTTP_400_BAD_REQUEST)
 
         if not user.is_verified:
             user.is_verified = True
@@ -141,9 +126,9 @@ class ResendVerificationView(APIView):
     @extend_schema(
         tags=["Auth"],
         summary="Resend Verification Email",
-        description="Resends the verification email if the user is not already verified.",
+        description="Resends the verification code if the user is not already verified.",
         request=ResendVerificationSerializer,
-        responses={200: OpenApiResponse(description="Verification link sent (if email exists).")}
+        responses={200: OpenApiResponse(description="Verification code sent (if email exists).")}
     )
     def post(self, request):
         serializer = ResendVerificationSerializer(data=request.data)
@@ -279,7 +264,10 @@ class MeView(APIView):
         return Response(UserSerializer(request.user).data)
 
 
-class ChangeEmailView(APIView):
+class ChangeEmailRequestView(APIView):
+    """Sends a code to the *new* address to prove the user actually owns
+    it before anything on the account changes."""
+
     authentication_classes = [CookieJWTAuthentication]
     permission_classes = [permissions.IsAuthenticated]
     throttle_classes = [ScopedRateThrottle]
@@ -287,32 +275,58 @@ class ChangeEmailView(APIView):
 
     @extend_schema(
         tags=["Auth"],
-        summary="Change Email Address",
-        description="Updates the user's email, marks them as unverified, sends a verification email, and logs them out.",
-        request=ChangeEmailSerializer,
-        responses={200: OpenApiResponse(description="Email updated. Verification link sent.")}
+        summary="Request Email Change",
+        description="Sends a 6-digit code to the new email address. The account isn't changed until the code is confirmed.",
+        request=ChangeEmailRequestSerializer,
+        responses={200: OpenApiResponse(description="Verification code sent to the new address.")}
     )
     def post(self, request):
         CookieJWTAuthentication().enforce_csrf(request)
-        serializer = ChangeEmailSerializer(data=request.data)
+        serializer = ChangeEmailRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        
+
+        new_email = serializer.validated_data["new_email"]
+        _, code = EmailOTP.issue(request.user, EmailOTP.Purpose.CHANGE_EMAIL, new_email=new_email)
+        send_change_email_otp_task(str(request.user.pk), new_email, code)
+        return Response({"detail": f"A verification code has been sent to {new_email}."})
+
+
+class ChangeEmailConfirmView(APIView):
+    authentication_classes = [CookieJWTAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "otp_confirm"
+
+    @extend_schema(
+        tags=["Auth"],
+        summary="Confirm Email Change",
+        description="Verifies the code sent to the new address, applies the email change, and logs the user out everywhere.",
+        request=ChangeEmailConfirmSerializer,
+        responses={
+            200: OpenApiResponse(description="Email updated."),
+            400: OpenApiResponse(description="Invalid or expired code.")
+        }
+    )
+    def post(self, request):
+        CookieJWTAuthentication().enforce_csrf(request)
+        serializer = ChangeEmailConfirmSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        otp = EmailOTP.verify(request.user, EmailOTP.Purpose.CHANGE_EMAIL, serializer.validated_data["code"])
+        if otp is None:
+            return Response({"detail": "Invalid or expired code."}, status=status.HTTP_400_BAD_REQUEST)
+
         user = request.user
-        user.email = serializer.validated_data["new_email"]
-        user.is_verified = False
-        user.save(update_fields=["email", "is_verified", "updated_at"])
-        
-        # Send new verification email
-        send_verification_email_task(str(user.pk))
-        
-        # Blacklist existing sessions
+        user.email = otp.new_email
+        user.save(update_fields=["email", "updated_at"])
+
         for outstanding in OutstandingToken.objects.filter(user=user):
             try:
                 RefreshToken(outstanding.token).blacklist()
             except TokenError:
                 continue
 
-        response = Response({"detail": "Email updated successfully. Please check your inbox to verify."})
+        response = Response({"detail": "Email updated successfully. Please log in again."})
         clear_auth_cookies(response)
         return response
 
@@ -335,12 +349,7 @@ class RequestPasswordChangeOTPView(APIView):
     def post(self, request):
         CookieJWTAuthentication().enforce_csrf(request)
 
-        code = f"{secrets.randbelow(1_000_000):06d}"
-        PasswordChangeOTP.objects.create(
-            user=request.user,
-            code_hash=make_password(code),
-            expires_at=timezone.now() + timedelta(minutes=PASSWORD_CHANGE_OTP_VALIDITY_MINUTES),
-        )
+        _, code = EmailOTP.issue(request.user, EmailOTP.Purpose.PASSWORD_CHANGE)
         send_password_change_otp_task(str(request.user.pk), code)
         return Response({"detail": "A verification code has been sent to your email."})
 
@@ -366,16 +375,9 @@ class ConfirmPasswordChangeOTPView(APIView):
         serializer = PasswordChangeOTPConfirmSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        otp = (
-            PasswordChangeOTP.objects.filter(user=request.user, used_at__isnull=True)
-            .order_by("-created_at")
-            .first()
-        )
-        if not otp or not otp.is_valid() or not check_password(serializer.validated_data["code"], otp.code_hash):
+        otp = EmailOTP.verify(request.user, EmailOTP.Purpose.PASSWORD_CHANGE, serializer.validated_data["code"])
+        if otp is None:
             return Response({"detail": "Invalid or expired code."}, status=status.HTTP_400_BAD_REQUEST)
-
-        otp.used_at = timezone.now()
-        otp.save(update_fields=["used_at", "updated_at"])
 
         request.user.set_password(serializer.validated_data["new_password"])
         request.user.save(update_fields=["password", "updated_at"])
@@ -392,9 +394,9 @@ class PasswordResetRequestView(APIView):
     @extend_schema(
         tags=["Auth"],
         summary="Request Password Reset",
-        description="Initiates a password reset flow by sending a reset link to the user's email.",
+        description="Initiates a password reset flow by sending a 6-digit code to the user's email.",
         request=PasswordResetRequestSerializer,
-        responses={200: OpenApiResponse(description="Reset instructions sent")}
+        responses={200: OpenApiResponse(description="Reset code sent")}
     )
     def post(self, request):
         serializer = PasswordResetRequestSerializer(data=request.data)
@@ -414,20 +416,21 @@ class PasswordResetConfirmView(APIView):
     @extend_schema(
         tags=["Auth"],
         summary="Confirm Password Reset",
-        description="Verifies the UID and token, then updates the user's password. Ends all current sessions.",
+        description="Verifies the emailed code, then updates the user's password. Ends all current sessions.",
         request=PasswordResetConfirmSerializer,
         responses={
             200: OpenApiResponse(description="Password has been reset"),
-            400: OpenApiResponse(description="Invalid or expired reset link")
+            400: OpenApiResponse(description="Invalid or expired reset code")
         }
     )
     def post(self, request):
         serializer = PasswordResetConfirmSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        user = _decode_uid(serializer.validated_data["uid"])
+        user = User.objects.filter(email=serializer.validated_data["email"].lower()).first()
 
-        if user is None or not password_reset_token.check_token(user, serializer.validated_data["token"]):
-            return Response({"detail": "Invalid or expired reset link."}, status=status.HTTP_400_BAD_REQUEST)
+        otp = user and EmailOTP.verify(user, EmailOTP.Purpose.PASSWORD_RESET, serializer.validated_data["code"])
+        if otp is None:
+            return Response({"detail": "Invalid or expired reset code."}, status=status.HTTP_400_BAD_REQUEST)
 
         user.set_password(serializer.validated_data["new_password"])
         user.save(update_fields=["password", "updated_at"])

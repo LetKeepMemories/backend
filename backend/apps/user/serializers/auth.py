@@ -48,8 +48,8 @@ class LoginSerializer(serializers.Serializer):
 
 
 class EmailVerificationConfirmSerializer(serializers.Serializer):
-    uid = serializers.CharField()
-    token = serializers.CharField()
+    email = serializers.EmailField()
+    code = serializers.CharField(max_length=6, min_length=6)
 
 
 class ResendVerificationSerializer(serializers.Serializer):
@@ -61,12 +61,12 @@ class PasswordResetRequestSerializer(serializers.Serializer):
 
 
 class PasswordResetConfirmSerializer(serializers.Serializer):
-    uid = serializers.CharField()
-    token = serializers.CharField()
+    email = serializers.EmailField()
+    code = serializers.CharField(max_length=6, min_length=6)
     new_password = serializers.CharField(min_length=10, validators=[validate_password])
 
 
-class ChangeEmailSerializer(serializers.Serializer):
+class ChangeEmailRequestSerializer(serializers.Serializer):
     new_email = serializers.EmailField()
 
     def validate_new_email(self, value):
@@ -74,6 +74,10 @@ class ChangeEmailSerializer(serializers.Serializer):
         if User.objects.filter(email=value).exists():
             raise serializers.ValidationError("This email is already in use.")
         return value
+
+
+class ChangeEmailConfirmSerializer(serializers.Serializer):
+    code = serializers.CharField(max_length=6, min_length=6)
 
 
 class PasswordChangeOTPConfirmSerializer(serializers.Serializer):

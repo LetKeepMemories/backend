@@ -1,10 +1,7 @@
 import pytest
-from django.utils.encoding import force_bytes
-from django.utils.http import urlsafe_base64_encode
 from rest_framework.test import APIClient
 
-from apps.user.models import User
-from apps.user.utils.tokens import email_verification_token, password_reset_token
+from apps.user.models import EmailOTP, User
 
 pytestmark = pytest.mark.django_db
 
@@ -13,10 +10,6 @@ def create_user(email="ada@example.com", password="correct-horse-battery", is_ve
     return User.objects.create_user(
         email=email, password=password, first_name="Ada", last_name="Lovelace", is_verified=is_verified
     )
-
-
-def uid_for(user):
-    return urlsafe_base64_encode(force_bytes(user.pk))
 
 
 def authenticated_client():
@@ -29,8 +22,21 @@ def authenticated_client():
     return client, csrf_token
 
 
+@pytest.fixture
+def captured_emails(monkeypatch):
+    """Intercepts every outgoing email so tests can read the OTP code that
+    was actually emailed, without weakening EmailOTP's hash-only storage."""
+    sent = []
+
+    def fake_send_email(*, to, subject, template, context):
+        sent.append({"to": to, "subject": subject, "template": template, "context": context})
+
+    monkeypatch.setattr("apps.user.utils.tasks.send_email", fake_send_email)
+    return sent
+
+
 class TestSignup:
-    def test_creates_unverified_user_and_sends_email(self, mailoutbox=None):
+    def test_creates_unverified_user_and_sends_email(self, captured_emails):
         client, _ = authenticated_client()
         response = client.post(
             "/api/auth/signup/",
@@ -42,6 +48,8 @@ class TestSignup:
         user = User.objects.get(email="ada@example.com")
         assert not user.is_verified
         assert user.check_password("correct-horse-battery")
+        assert captured_emails[-1]["template"] == "verify_email.html"
+        assert "code" in captured_emails[-1]["context"]
 
     def test_duplicate_email_rejected(self):
         create_user()
@@ -64,12 +72,12 @@ class TestSignup:
 
 
 class TestVerifyEmail:
-    def test_valid_token_verifies_and_logs_in(self):
+    def test_valid_code_verifies_and_logs_in(self, captured_emails):
         user = create_user()
-        token = email_verification_token.make_token(user)
+        _, code = EmailOTP.issue(user, EmailOTP.Purpose.EMAIL_VERIFICATION)
         client, _ = authenticated_client()
 
-        response = client.post("/api/auth/verify-email/", {"uid": uid_for(user), "token": token}, format="json")
+        response = client.post("/api/auth/verify-email/", {"email": user.email, "code": code}, format="json")
 
         assert response.status_code == 200
         user.refresh_from_db()
@@ -77,13 +85,23 @@ class TestVerifyEmail:
         assert "access_token" in response.cookies
         assert "refresh_token" in response.cookies
 
-    def test_invalid_token_rejected(self):
+    def test_invalid_code_rejected(self):
         user = create_user()
+        EmailOTP.issue(user, EmailOTP.Purpose.EMAIL_VERIFICATION)
         client, _ = authenticated_client()
-        response = client.post("/api/auth/verify-email/", {"uid": uid_for(user), "token": "bogus"}, format="json")
+        response = client.post("/api/auth/verify-email/", {"email": user.email, "code": "000000"}, format="json")
         assert response.status_code == 400
         user.refresh_from_db()
         assert not user.is_verified
+
+    def test_code_is_single_use(self):
+        user = create_user()
+        _, code = EmailOTP.issue(user, EmailOTP.Purpose.EMAIL_VERIFICATION)
+        client, _ = authenticated_client()
+        first = client.post("/api/auth/verify-email/", {"email": user.email, "code": code}, format="json")
+        assert first.status_code == 200
+        second = client.post("/api/auth/verify-email/", {"email": user.email, "code": code}, format="json")
+        assert second.status_code == 400
 
 
 class TestLogin:
@@ -162,10 +180,10 @@ class TestPasswordReset:
         )
         old_refresh = login_response.cookies["refresh_token"].value
 
-        token = password_reset_token.make_token(user)
+        _, code = EmailOTP.issue(user, EmailOTP.Purpose.PASSWORD_RESET)
         confirm = client.post(
             "/api/auth/password-reset/confirm/",
-            {"uid": uid_for(user), "token": token, "new_password": "new-correct-horse-99"},
+            {"email": user.email, "code": code, "new_password": "new-correct-horse-99"},
             format="json",
         )
         assert confirm.status_code == 200
@@ -185,3 +203,52 @@ class TestPasswordReset:
         client, _ = authenticated_client()
         response = client.post("/api/auth/password-reset/", {"email": "ghost@example.com"}, format="json")
         assert response.status_code == 200
+
+    def test_invalid_code_rejected(self):
+        user = create_user(is_verified=True)
+        EmailOTP.issue(user, EmailOTP.Purpose.PASSWORD_RESET)
+        client, _ = authenticated_client()
+        response = client.post(
+            "/api/auth/password-reset/confirm/",
+            {"email": user.email, "code": "000000", "new_password": "new-correct-horse-99"},
+            format="json",
+        )
+        assert response.status_code == 400
+
+
+class TestChangeEmail:
+    def _logged_in_client(self, user):
+        client, csrf = authenticated_client()
+        client.post("/api/auth/login/", {"email": user.email, "password": "correct-horse-battery"}, format="json")
+        return client
+
+    def test_request_does_not_change_email_until_confirmed(self, captured_emails):
+        user = create_user(is_verified=True)
+        client = self._logged_in_client(user)
+
+        response = client.post("/api/auth/change-email/", {"new_email": "new@example.com"}, format="json")
+        assert response.status_code == 200
+        assert captured_emails[-1]["to"] == "new@example.com"
+
+        user.refresh_from_db()
+        assert user.email == "ada@example.com"
+
+    def test_confirm_applies_the_change_and_logs_out(self, captured_emails):
+        user = create_user(is_verified=True)
+        client = self._logged_in_client(user)
+        client.post("/api/auth/change-email/", {"new_email": "new@example.com"}, format="json")
+        code = captured_emails[-1]["context"]["code"]
+
+        response = client.post("/api/auth/change-email/confirm/", {"code": code}, format="json")
+        assert response.status_code == 200
+
+        user.refresh_from_db()
+        assert user.email == "new@example.com"
+
+    def test_taken_email_rejected(self):
+        create_user(email="taken@example.com", is_verified=True)
+        user = create_user(email="ada@example.com", is_verified=True)
+        client = self._logged_in_client(user)
+
+        response = client.post("/api/auth/change-email/", {"new_email": "taken@example.com"}, format="json")
+        assert response.status_code == 400

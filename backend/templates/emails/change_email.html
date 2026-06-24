@@ -1,10 +1,10 @@
 {% extends "emails/base_email.html" %}
-{% block title %}Reset your password{% endblock %}
+{% block title %}Confirm your new email{% endblock %}
 {% block content %}
-  <h1 style="margin:0 0 16px;font-size:20px;color:#0f172a;">Reset your password</h1>
+  <h1 style="margin:0 0 16px;font-size:20px;color:#0f172a;">Confirm your new email address</h1>
   <p style="margin:0 0 24px;font-size:15px;line-height:24px;color:#334155;">
-    Hi {{ first_name }}, we received a request to reset your Lets Keep Memories password. Enter the code
-    below to choose a new one.
+    Hi {{ first_name }}, use the code below to confirm <strong>{{ new_email }}</strong> as your new
+    Lets Keep Memories email address. Nothing changes on your account until you confirm.
   </p>
   <table role="presentation" cellpadding="0" cellspacing="0">
     <tr>
@@ -14,6 +14,7 @@
     </tr>
   </table>
   <p style="margin:24px 0 0;font-size:13px;line-height:20px;color:#64748b;">
-    This code expires in 15 minutes. If you didn't request a password reset, you can safely ignore this email.
+    This code expires in 10 minutes. If you didn't request this change, you can safely ignore this email —
+    your account email will stay the same.
   </p>
 {% endblock %}

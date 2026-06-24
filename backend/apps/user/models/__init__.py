@@ -1,4 +1,4 @@
-from .otp import PasswordChangeOTP
+from .otp import EmailOTP
 from .user import User
 
-__all__ = ["PasswordChangeOTP", "User"]
+__all__ = ["EmailOTP", "User"]

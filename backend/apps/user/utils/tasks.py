@@ -1,26 +1,19 @@
 from django.conf import settings
-from django.utils.encoding import force_bytes
-from django.utils.http import urlsafe_base64_encode
 
 from apps.core.utils.email import send_email
-from apps.user.utils.tokens import email_verification_token, password_reset_token
-
-
-def _uid_for(user) -> str:
-    return urlsafe_base64_encode(force_bytes(user.pk))
+from apps.user.models import EmailOTP
 
 
 def send_verification_email_task(user_id):
     from apps.user.models import User
 
     user = User.objects.get(pk=user_id)
-    token = email_verification_token.make_token(user)
-    link = f"{settings.FRONTEND_URL}/verify-email?uid={_uid_for(user)}&token={token}"
+    _, code = EmailOTP.issue(user, EmailOTP.Purpose.EMAIL_VERIFICATION, validity_minutes=15)
     send_email(
         to=user.email,
-        subject="Verify your Lets Keep Memories account",
+        subject=f"Email Verification",
         template="verify_email.html",
-        context={"first_name": user.first_name, "verification_link": link},
+        context={"first_name": user.first_name, "code": code},
     )
 
 
@@ -40,13 +33,12 @@ def send_password_reset_email_task(user_id):
     from apps.user.models import User
 
     user = User.objects.get(pk=user_id)
-    token = password_reset_token.make_token(user)
-    link = f"{settings.FRONTEND_URL}/reset-password?uid={_uid_for(user)}&token={token}"
+    _, code = EmailOTP.issue(user, EmailOTP.Purpose.PASSWORD_RESET, validity_minutes=15)
     send_email(
         to=user.email,
-        subject="Reset your Lets Keep Memories password",
+        subject=f"Password Reset Code",
         template="password_reset.html",
-        context={"first_name": user.first_name, "reset_link": link},
+        context={"first_name": user.first_name, "code": code},
     )
 
 
@@ -56,7 +48,19 @@ def send_password_change_otp_task(user_id, code):
     user = User.objects.get(pk=user_id)
     send_email(
         to=user.email,
-        subject=f"{code} is your Lets Keep Memories verification code",
+        subject=f"Change Password verification",
         template="password_change_otp.html",
         context={"first_name": user.first_name, "code": code},
+    )
+
+
+def send_change_email_otp_task(user_id, new_email, code):
+    from apps.user.models import User
+
+    user = User.objects.get(pk=user_id)
+    send_email(
+        to=new_email,
+        subject=f"Change Email verification",
+        template="change_email.html",
+        context={"first_name": user.first_name, "code": code, "new_email": new_email},
     )
