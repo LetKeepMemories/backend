@@ -5,18 +5,13 @@ Base settings shared by every environment. Environment-specific files
 from datetime import timedelta
 from pathlib import Path
 
-import environ
+from decouple import config, Csv
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
-env = environ.Env()
-env_file = BASE_DIR / ".env"
-if env_file.exists():
-    environ.Env.read_env(str(env_file))
-
-SECRET_KEY = env("DJANGO_SECRET_KEY", default="insecure-dev-key-change-me")
-DEBUG = False
-ALLOWED_HOSTS = env.list("DJANGO_ALLOWED_HOSTS", default=[])
+SECRET_KEY = config("DJANGO_SECRET_KEY", default="insecure-dev-key-change-me")
+DEBUG = config("DEBUG", default=False, cast=bool)
+ALLOWED_HOSTS = config("DJANGO_ALLOWED_HOSTS", default="*", cast=Csv())
 
 # ---------------------------------------------------------------------------
 # Applications
@@ -84,18 +79,30 @@ WSGI_APPLICATION = "config.wsgi.application"
 ASGI_APPLICATION = "config.asgi.application"
 
 # ---------------------------------------------------------------------------
-# Database
+# Database  (matches neoEventBackend pattern — individual env vars)
 # ---------------------------------------------------------------------------
-ENVIRONMENT = env("ENV", default="local")
+ENV = config("ENV", default="local")
 
-if ENVIRONMENT == "local":
+import sys  # noqa: E402
+TESTING = "test" in sys.argv or any("pytest" in arg for arg in sys.argv)
+
+if TESTING or ENV == "local":
     DATABASES = {
-        "default": env.db("DATABASE_URL", default="sqlite:///" + str(BASE_DIR / "db.sqlite3")),
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": BASE_DIR / "db.sqlite3",
+        }
     }
 else:
-    # On dev/prod, require a Postgres DATABASE_URL
     DATABASES = {
-        "default": env.db("DATABASE_URL"),
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": config("DB_NAME", default="memories_db"),
+            "USER": config("DB_USER", default="postgres"),
+            "PASSWORD": config("DB_PASSWORD", default=""),
+            "HOST": config("DB_HOST", default="localhost"),
+            "PORT": config("DB_PORT", default="5432"),
+        }
     }
 
 # ---------------------------------------------------------------------------
@@ -177,48 +184,46 @@ SIMPLE_JWT = {
 # ---------------------------------------------------------------------------
 AUTH_COOKIE_ACCESS = "access_token"
 AUTH_COOKIE_REFRESH = "refresh_token"
-AUTH_COOKIE_SECURE = env.bool("AUTH_COOKIE_SECURE", default=True)
+AUTH_COOKIE_SECURE = config("AUTH_COOKIE_SECURE", default=True, cast=bool)
 AUTH_COOKIE_SAMESITE = "Lax"
-AUTH_COOKIE_DOMAIN = env("AUTH_COOKIE_DOMAIN", default=None)
+AUTH_COOKIE_DOMAIN = config("AUTH_COOKIE_DOMAIN", default=None)
 
 # ---------------------------------------------------------------------------
 # CORS / CSRF
 # ---------------------------------------------------------------------------
-CORS_ALLOWED_ORIGINS = env.list("CORS_ALLOWED_ORIGINS", default=[])
+CORS_ALLOWED_ORIGINS = config("CORS_ALLOWED_ORIGINS", default="", cast=Csv())
 CORS_ALLOW_CREDENTIALS = True
-CSRF_TRUSTED_ORIGINS = env.list("CSRF_TRUSTED_ORIGINS", default=[])
-CSRF_COOKIE_SECURE = env.bool("AUTH_COOKIE_SECURE", default=True)
-SESSION_COOKIE_SECURE = env.bool("AUTH_COOKIE_SECURE", default=True)
-
-
+CSRF_TRUSTED_ORIGINS = config("CSRF_TRUSTED_ORIGINS", default="", cast=Csv())
+CSRF_COOKIE_SECURE = config("AUTH_COOKIE_SECURE", default=True, cast=bool)
+SESSION_COOKIE_SECURE = config("AUTH_COOKIE_SECURE", default=True, cast=bool)
 
 # ---------------------------------------------------------------------------
 # Frontend / links used in emails
 # ---------------------------------------------------------------------------
-FRONTEND_URL = env("FRONTEND_URL", default="http://localhost:3000")
+FRONTEND_URL = config("FRONTEND_URL", default="http://localhost:3000")
 
 # ---------------------------------------------------------------------------
 # Resend (email)
 # ---------------------------------------------------------------------------
-RESEND_API_KEY = env("RESEND_API_KEY", default="")
-DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="Lets Keep Memories <no-reply@lifememories.app>")
+RESEND_API_KEY = config("RESEND_API_KEY", default="")
+DEFAULT_FROM_EMAIL = config("DEFAULT_FROM_EMAIL", default="Lets Keep Memories <no-reply@lifememories.app>")
 
 # ---------------------------------------------------------------------------
 # Cloudinary & Upload Limits
 # ---------------------------------------------------------------------------
-CLOUDINARY_CLOUD_NAME = env("CLOUDINARY_CLOUD_NAME", default="")
-CLOUDINARY_API_KEY = env("CLOUDINARY_API_KEY", default="")
-CLOUDINARY_API_SECRET = env("CLOUDINARY_API_SECRET", default="")
+CLOUDINARY_CLOUD_NAME = config("CLOUDINARY_CLOUD_NAME", default="")
+CLOUDINARY_API_KEY = config("CLOUDINARY_API_KEY", default="")
+CLOUDINARY_API_SECRET = config("CLOUDINARY_API_SECRET", default="")
 
 # ---------------------------------------------------------------------------
 # Paystack
 # ---------------------------------------------------------------------------
-PAYSTACK_SECRET_KEY = env("PAYSTACK_SECRET_KEY", default="")
+PAYSTACK_SECRET_KEY = config("PAYSTACK_SECRET_KEY", default="")
 
 # ---------------------------------------------------------------------------
 # OpenAI (Whisper transcription)
 # ---------------------------------------------------------------------------
-OPENAI_API_KEY = env("OPENAI_API_KEY", default="")
+OPENAI_API_KEY = config("OPENAI_API_KEY", default="")
 
 
 LOGGING = {
