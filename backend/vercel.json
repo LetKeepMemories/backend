@@ -3,14 +3,14 @@
   "buildCommand": "chmod +x build.sh && ./build.sh",
   "builds": [
     {
-      "src": "config/wsgi.py",
+      "src": "api/index.py",
       "use": "@vercel/python"
     }
   ],
   "routes": [
     {
       "src": "/(.*)",
-      "dest": "config/wsgi.py"
+      "dest": "api/index.py"
     }
   ]
 }
