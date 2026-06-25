@@ -217,6 +217,7 @@ class MessageSerializer(serializers.ModelSerializer):
             "sender_full_name",
             "relationship",
             "message",
+            "is_hidden",
             "media",
             "created_at",
         ]

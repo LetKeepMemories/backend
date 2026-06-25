@@ -11,6 +11,10 @@ class Message(BaseModel):
     sender_last_name = models.CharField(max_length=150, blank=True)
     relationship = models.CharField(max_length=100, blank=True)
     message = models.TextField(blank=True)
+    is_hidden = models.BooleanField(
+        default=False,
+        help_text="When True the message is hidden from the public wall but not deleted.",
+    )
 
     class Meta:
         ordering = ["-created_at"]
@@ -18,6 +22,7 @@ class Message(BaseModel):
 
     def __str__(self):
         return f"{self.sender_first_name} -> {self.occasion.title}"
+
 
     @property
     def sender_full_name(self) -> str:

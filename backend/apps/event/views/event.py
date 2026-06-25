@@ -223,6 +223,18 @@ class MessageModerationView(APIView):
         message.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
+    @extend_schema(
+        tags=["Events (Owner)"],
+        summary="Toggle Message Visibility",
+        description="Toggles is_hidden on a message. Hidden messages are not shown on the public wall.",
+        responses={200: MessageSerializer}
+    )
+    def patch(self, request, occasion_id, message_id):
+        message = self.get_object(occasion_id, message_id)
+        message.is_hidden = not message.is_hidden
+        message.save(update_fields=["is_hidden"])
+        return Response(MessageSerializer(message).data)
+
 
 class PublicOccasionDetailView(APIView):
     authentication_classes = []
@@ -252,7 +264,7 @@ class PublicMessageListView(generics.ListAPIView):
 
     def get_queryset(self):
         occasion = get_object_or_404(Occasion, slug=self.kwargs["slug"], status=Occasion.Status.PUBLISHED)
-        return occasion.messages.prefetch_related("media")
+        return occasion.messages.filter(is_hidden=False).prefetch_related("media")
 
 
 class GuestMessageCreateView(APIView):
