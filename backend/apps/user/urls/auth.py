@@ -14,6 +14,7 @@ from apps.user.views import (
     ResendVerificationView,
     SignupView,
     VerifyEmailView,
+    GoogleLoginView,
 )
 
 urlpatterns = [
@@ -30,4 +31,5 @@ urlpatterns = [
     path("password-reset/confirm/", PasswordResetConfirmView.as_view(), name="password-reset-confirm"),
     path("password-change/request-otp/", RequestPasswordChangeOTPView.as_view(), name="password-change-request-otp"),
     path("password-change/confirm/", ConfirmPasswordChangeOTPView.as_view(), name="password-change-confirm"),
+    path("google-login/", GoogleLoginView.as_view(), name="google-login"),
 ]

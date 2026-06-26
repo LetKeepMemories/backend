@@ -83,3 +83,7 @@ class ChangeEmailConfirmSerializer(serializers.Serializer):
 class PasswordChangeOTPConfirmSerializer(serializers.Serializer):
     code = serializers.CharField(max_length=6, min_length=6)
     new_password = serializers.CharField(min_length=10, validators=[validate_password])
+
+
+class GoogleLoginSerializer(serializers.Serializer):
+    id_token = serializers.CharField()

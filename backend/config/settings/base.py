@@ -235,3 +235,9 @@ LOGGING = {
         "django": {"handlers": ["console"], "level": "INFO", "propagate": False},
     },
 }
+
+# ---------------------------------------------------------------------------
+# Google Auth
+# ---------------------------------------------------------------------------
+GOOGLE_CLIENT_ID = config("GOOGLE_CLIENT_ID", default="")
+GOOGLE_CLIENT_SECRET = config("GOOGLE_CLIENT_SECRET", default="")

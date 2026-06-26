@@ -1,5 +1,8 @@
 from django.contrib.auth import authenticate
+from django.conf import settings
 from django.middleware.csrf import get_token
+import requests
+import urllib.parse
 from rest_framework import permissions, status
 from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
@@ -445,3 +448,69 @@ class PasswordResetConfirmView(APIView):
                 continue
 
         return Response({"detail": "Password has been reset. Please log in."})
+
+
+class GoogleLoginView(APIView):
+    authentication_classes = []
+    permission_classes = [permissions.AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "auth"
+
+    @extend_schema(
+        tags=["Auth"],
+        summary="Google Login",
+        description="Verifies the id_token from Google and logs the user in (or signs them up).",
+        request=GoogleLoginSerializer,
+        responses={
+            200: UserSerializer,
+            400: OpenApiResponse(description="Invalid token or missing email")
+        }
+    )
+    def post(self, request):
+        from google.oauth2 import id_token
+        from google.auth.transport import requests as google_requests
+        from apps.user.serializers import GoogleLoginSerializer
+
+        serializer = GoogleLoginSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        token = serializer.validated_data["id_token"]
+
+        try:
+            # We skip client_id verification here since we might have multiple frontend clients,
+            # or you can pass settings.GOOGLE_CLIENT_ID if you want to be strict.
+            idinfo = id_token.verify_oauth2_token(token, google_requests.Request(), settings.GOOGLE_CLIENT_ID)
+            
+            email = idinfo.get("email")
+            if not email:
+                return Response({"detail": "Email not provided by Google."}, status=status.HTTP_400_BAD_REQUEST)
+            
+            email = email.lower()
+            
+            # Log in or create user
+            user = User.objects.filter(email=email).first()
+            if not user:
+                # Create user
+                user = User.objects.create_user(
+                    email=email,
+                    first_name=idinfo.get("given_name", ""),
+                    last_name=idinfo.get("family_name", ""),
+                    password=User.objects.make_random_password()
+                )
+                # Mark as verified since Google verified it
+                user.is_verified = True
+                user.save(update_fields=["is_verified"])
+                send_welcome_email_task(str(user.pk))
+            elif not user.is_active:
+                return Response({"detail": "This account has been deactivated."}, status=status.HTTP_403_FORBIDDEN)
+            
+            if not user.is_verified:
+                # If they had an unverified account, verify it now since they logged in with Google
+                user.is_verified = True
+                user.save(update_fields=["is_verified"])
+
+            return _issue_session(user)
+            
+        except ValueError:
+            return Response({"detail": "Invalid Google token."}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)

@@ -10,6 +10,7 @@ from .auth import (
     SignupSerializer,
     UserSerializer,
     UserUpdateSerializer,
+    GoogleLoginSerializer,
 )
 
 __all__ = [
@@ -24,4 +25,5 @@ __all__ = [
     "SignupSerializer",
     "UserSerializer",
     "UserUpdateSerializer",
+    "GoogleLoginSerializer",
 ]
