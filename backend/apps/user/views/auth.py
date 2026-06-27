@@ -19,6 +19,7 @@ from apps.user.serializers import (
     ChangeEmailConfirmSerializer,
     ChangeEmailRequestSerializer,
     EmailVerificationConfirmSerializer,
+    GoogleLoginSerializer,
     LoginSerializer,
     PasswordChangeOTPConfirmSerializer,
     PasswordResetConfirmSerializer,
@@ -469,7 +470,6 @@ class GoogleLoginView(APIView):
     def post(self, request):
         from google.oauth2 import id_token
         from google.auth.transport import requests as google_requests
-        from apps.user.serializers import GoogleLoginSerializer
 
         serializer = GoogleLoginSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
