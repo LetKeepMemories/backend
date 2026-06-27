@@ -494,7 +494,7 @@ class GoogleLoginView(APIView):
                     email=email,
                     first_name=idinfo.get("given_name", ""),
                     last_name=idinfo.get("family_name", ""),
-                    password=User.objects.make_random_password()
+                    password=None
                 )
                 # Mark as verified since Google verified it
                 user.is_verified = True
@@ -512,5 +512,8 @@ class GoogleLoginView(APIView):
             
         except ValueError:
             return Response({"detail": "Invalid Google token."}, status=status.HTTP_400_BAD_REQUEST)
-        except Exception as e:
-            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception:
+            return Response(
+                {"detail": "We couldn't sign you in with Google. Please try again."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
