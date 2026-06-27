@@ -14,7 +14,6 @@ from .auth import (
     SignupView,
     VerifyEmailView,
     GoogleLoginView,
-    GoogleCallbackView,
 )
 
 __all__ = [
@@ -33,5 +32,5 @@ __all__ = [
     "SignupView",
     "VerifyEmailView",
     "GoogleLoginView",
-    "GoogleCallbackView",
 ]
+
